@@ -1,6 +1,6 @@
 namespace AiForwardingAgent.AgentServices;
 
-public class PackageInformation
+public class PackageDto
 {
     /// <summary>
     /// Anzahl identischer Packstücke dieser Gruppe.

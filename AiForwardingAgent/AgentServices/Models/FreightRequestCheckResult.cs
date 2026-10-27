@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace AiForwardingAgent.AgentServices;
+namespace AiForwardingAgent.AgentServices.Models;
 
 public class FreightRequestCheckResult
 
@@ -14,6 +14,8 @@ public class FreightRequestCheckResult
     public string? EmailText { get; set; } = string.Empty;
     
     public string? MessageId { get; set; } = string.Empty;
+
+    public int FreightRequestId { get; set; }
     private static JsonSerializerOptions Options => new JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = true

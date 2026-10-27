@@ -1,33 +1,40 @@
 using AiForwardingAgent.AgentServices;
-using AiForwardingAgent.Data.Models;
+using AiForwardingAgent.AgentServices.Models;
 using Microsoft.Agents.AI.Workflows;
 
 namespace AiForwardingAgent.WorkflowExecutors;
 
-internal sealed partial class FreightRequestAnalyzeExecutor(IFreightRequestAnalyzeAgentService freightRequestAnalyzeAgentService)
-    : Executor<FreightRequestCheckResult, ShipmentInformation>("FreightRequestAnalyzeExecutor")
+internal partial class FreightRequestAnalyzeExecutor(IFreightRequestAnalyzeAgentService freightRequestAnalyzeAgentService)
+    : Executor<FreightRequestDto,FreightRequestDto>("FreightRequestAnalyzeExecutor")
 {
-    public override async ValueTask<ShipmentInformation> HandleAsync(FreightRequestCheckResult message, IWorkflowContext context,
-        CancellationToken cancellationToken = new CancellationToken())
+    public override async ValueTask<FreightRequestDto> HandleAsync(
+        FreightRequestDto message, 
+        IWorkflowContext context,
+        CancellationToken cancellationToken = default)
     {
-        var subject = message.Subject;
-        if (string.IsNullOrEmpty(subject)) 
-        {
-            throw new ArgumentNullException(nameof(subject), "Email subject cannot be null or empty.");
-        }
-        var text = message.EmailText;
-        if (string.IsNullOrEmpty(text)) 
-        {
-            throw new ArgumentNullException(nameof(text), "Email text cannot be null or empty.");
-        }
-        var massageId = message.MessageId; 
-        if (string.IsNullOrEmpty(massageId)) 
-        {
-            throw new ArgumentNullException(nameof(massageId), "Email MessageId cannot be null or empty.");
-        }
-        var result = await freightRequestAnalyzeAgentService.AnalyzeFreightRequestAsync(emailSubject: subject, emailText: text, messageId: massageId, cancellationToken);
-        result.MessageId = massageId;
-        result.MessageText = text;
-        return await ValueTask.FromResult(result);
+        var email = message.FreightRequestEmail 
+                    ?? throw new ArgumentNullException(nameof(message.FreightRequestEmail));
+
+        if (string.IsNullOrEmpty(email.Subject))
+            throw new ArgumentNullException(nameof(email.Subject), "Email subject cannot be null or empty.");
+
+        if (string.IsNullOrEmpty(email.Body))
+            throw new ArgumentNullException(nameof(email.Body), "Email text cannot be null or empty.");
+
+        if (string.IsNullOrEmpty(email.EmailSender))
+            throw new ArgumentNullException(nameof(email.EmailSender), "Email sender cannot be null or empty.");
+
+        var messageId = email.MessageId;
+        if (string.IsNullOrEmpty(messageId?.ToString()))
+            throw new ArgumentNullException(nameof(messageId), "Email MessageId cannot be null or empty.");
+
+
+        var result = await freightRequestAnalyzeAgentService.AnalyzeFreightRequestAsync(message, cancellationToken);
+        
+        result.FreightRequestEmail =email;
+        return result;
     }
+
+
+    
 }

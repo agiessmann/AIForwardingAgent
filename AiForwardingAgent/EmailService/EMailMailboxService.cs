@@ -1,10 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+
 using System.Net;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using MimeKit;
 using MailKit.Net.Smtp;
 using MailKit;
@@ -111,7 +107,8 @@ public partial class EMailMailboxService(EmailOptions smtpOptions) :
                        ?? string.Empty,
                 Subject = summary.Envelope?.Subject ?? string.Empty,
                 ReceivedAt = summary.InternalDate,
-                IsRead = summary.Flags?.HasFlag(MessageFlags.Seen) == true
+                IsRead = summary.Flags?.HasFlag(MessageFlags.Seen) == true,
+                FlagColor = GetAppleMailFlagColor(summary.Flags, summary.Keywords)
             })
             .ToList();
 
@@ -153,7 +150,7 @@ public partial class EMailMailboxService(EmailOptions smtpOptions) :
         {
             throw new InvalidOperationException("Die ausgewählte E-Mail wurde nicht gefunden.");
         }
-
+        
         var textBody = message.TextBody;
         var isConvertedFromHtml = false;
 
@@ -177,7 +174,7 @@ public partial class EMailMailboxService(EmailOptions smtpOptions) :
     {
         ValidateImapConfiguration();
 
-        var uid = ParseUniqueId(messageId);
+        var uid = ParseUniqueId(messageId.ToString());
 
         using var imapClient = new ImapClient();
         imapClient.CheckCertificateRevocation = !_smtpOptions.DisableCertificateRevocationCheck;
@@ -212,12 +209,13 @@ public partial class EMailMailboxService(EmailOptions smtpOptions) :
         await imapClient.DisconnectAsync(true, cancellationToken);
     }
     
-    public async Task MarkAsFlaggedAsync(string messageId, CancellationToken cancellationToken = default)
+    public async Task MarkAsFlaggedAsync(int messageId, AppleMailFlagColor? flagColor,
+        CancellationToken cancellationToken = default)
     
     {
         ValidateImapConfiguration();
 
-        var uid = ParseUniqueId(messageId);
+        var uid = ParseUniqueId(messageId.ToString());
 
         using var imapClient = new ImapClient();
         imapClient.CheckCertificateRevocation = !_smtpOptions.DisableCertificateRevocationCheck;
@@ -237,6 +235,55 @@ public partial class EMailMailboxService(EmailOptions smtpOptions) :
             : await imapClient.GetFolderAsync(_smtpOptions.ImapInboxFolder, cancellationToken);
 
         await inbox.OpenAsync(FolderAccess.ReadWrite, cancellationToken);
+        
+        if (!inbox.PermanentFlags.HasFlag(MessageFlags.UserDefined))
+        {
+            throw new NotSupportedException("Der IMAP-Server unterstützt keine benutzerdefinierten Flags.");
+        }
+        
+        // Vorhandene Farb-Bits entfernen
+        var removeRequest = new StoreFlagsRequest(StoreAction.Remove, MessageFlags.Flagged);
+        removeRequest.Keywords.Add("$MailFlagBit0");
+        removeRequest.Keywords.Add("$MailFlagBit1");
+        removeRequest.Keywords.Add("$MailFlagBit2");
+        await inbox.StoreAsync(uid, removeRequest, cancellationToken);
+        
+        // null = Flag komplett entfernen
+        if (flagColor is null)
+        {
+            await imapClient.DisconnectAsync(true, cancellationToken);
+            return;
+        }
+        
+        var addRequest = new StoreFlagsRequest(StoreAction.Add, MessageFlags.Flagged);
+
+        switch (flagColor.Value)
+        {
+            case AppleMailFlagColor.Red: 
+                break;
+            case AppleMailFlagColor.Orange:
+                addRequest.Keywords.Add("$MailFlagBit0");
+                break;
+            case AppleMailFlagColor.Yellow:
+                addRequest.Keywords.Add("$MailFlagBit1");
+                break;
+            case AppleMailFlagColor.Green:
+                addRequest.Keywords.Add("$MailFlagBit0");
+                addRequest.Keywords.Add("$MailFlagBit1");
+                break;
+            case AppleMailFlagColor.Blue:
+                addRequest.Keywords.Add("$MailFlagBit2");
+                break;
+            case AppleMailFlagColor.Purple:
+                addRequest.Keywords.Add("$MailFlagBit0");
+                addRequest.Keywords.Add("$MailFlagBit2");
+                break;
+            case AppleMailFlagColor.Gray:
+                addRequest.Keywords.Add("$MailFlagBit1");
+                addRequest.Keywords.Add("$MailFlagBit2");
+                break;
+        }
+        
 
         var summaries = await inbox.FetchAsync(
             [uid],
@@ -248,7 +295,7 @@ public partial class EMailMailboxService(EmailOptions smtpOptions) :
             throw new InvalidOperationException("Die ausgewählte E-Mail wurde nicht gefunden.");
         }
 
-        await inbox.AddFlagsAsync(uid, MessageFlags.Flagged, true, cancellationToken);
+        await inbox.StoreAsync(uid, addRequest, cancellationToken);
         await imapClient.DisconnectAsync(true, cancellationToken);
     }
 
@@ -292,13 +339,14 @@ public partial class EMailMailboxService(EmailOptions smtpOptions) :
         await imapClient.DisconnectAsync(true, cancellationToken);
     }
 
-    public async Task ReplyToMessageAsync(string messageId, string textBody, string? htmlBody = null, string? subjectPrefix = null,
-    CancellationToken cancellationToken = default)
+    public async Task ReplyToMessageAsync(int messageId, string textBody, string? htmlBody = null,
+        string? subjectPrefix = null,
+        CancellationToken cancellationToken = default)
 {
     ValidateImapConfiguration();
     ValidateSmtpConfiguration();
 
-    var uid = ParseUniqueId(messageId);
+    var uid = ParseUniqueId(messageId.ToString());
 
     MimeMessage originalMessage;
 
@@ -574,7 +622,63 @@ public partial class EMailMailboxService(EmailOptions smtpOptions) :
         await smtpClient.DisconnectAsync(true, cancellationToken);
     }
     
-    
+    public async Task TestImapFlagSupportAsync(CancellationToken cancellationToken = default)
+    {
+        ValidateImapConfiguration();
+
+        using var imapClient = new ImapClient();
+
+        imapClient.CheckCertificateRevocation =
+            !_smtpOptions.DisableCertificateRevocationCheck;
+
+        await imapClient.ConnectAsync(
+            _smtpOptions.ImapHost,
+            _smtpOptions.ImapPort,
+            GetImapSocketOptions(),
+            cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(_smtpOptions.UserName))
+        {
+            await imapClient.AuthenticateAsync(
+                _smtpOptions.UserName,
+                _smtpOptions.Password,
+                cancellationToken);
+        }
+
+        var inbox = _smtpOptions.ImapInboxFolder.Equals(
+            "INBOX",
+            StringComparison.OrdinalIgnoreCase)
+            ? imapClient.Inbox
+            : await imapClient.GetFolderAsync(
+                _smtpOptions.ImapInboxFolder,
+                cancellationToken);
+
+        // Für Änderungen öffnen
+        await inbox.OpenAsync(
+            FolderAccess.ReadWrite,
+            cancellationToken);
+
+        // Testen, ob benutzerdefinierte Keywords unterstützt werden
+        var supportsCustomKeywords =
+            inbox.PermanentFlags.HasFlag(MessageFlags.UserDefined);
+
+        Console.WriteLine(
+            $"Custom IMAP Keywords: {supportsCustomKeywords}");
+
+        Console.WriteLine(
+            $"PermanentFlags: {inbox.PermanentFlags}");
+
+        Console.WriteLine("PermanentKeywords:");
+
+        foreach (var keyword in inbox.PermanentKeywords)
+        {
+            Console.WriteLine($"  {keyword}");
+        }
+
+        await imapClient.DisconnectAsync(
+            true,
+            cancellationToken);
+    }
 
     private void ValidateImapConfiguration()
     {
@@ -699,4 +803,36 @@ public partial class EMailMailboxService(EmailOptions smtpOptions) :
     private static partial Regex MyRegex();
     [GeneratedRegex("\\s+")]
     private static partial Regex MyRegex1();
+    
+    private static AppleMailFlagColor? GetAppleMailFlagColor(
+        MessageFlags? flags,
+        IReadOnlySet<string>? keywords)
+    {
+        if (flags?.HasFlag(MessageFlags.Flagged) != true)
+            return null;
+
+        var bit0 = keywords?.Contains("$MailFlagBit0") == true;
+        var bit1 = keywords?.Contains("$MailFlagBit1") == true;
+        var bit2 = keywords?.Contains("$MailFlagBit2") == true;
+
+        if (bit0 && bit1 && !bit2)
+            return AppleMailFlagColor.Green;
+
+        if (bit0 && !bit1 && bit2)
+            return AppleMailFlagColor.Purple;
+
+        if (!bit0 && bit1 && bit2)
+            return AppleMailFlagColor.Gray;
+
+        if (bit0 && !bit1 && !bit2)
+            return AppleMailFlagColor.Orange;
+
+        if (!bit0 && bit1 && !bit2)
+            return AppleMailFlagColor.Yellow;
+
+        if (!bit0 && !bit1 && bit2)
+            return AppleMailFlagColor.Blue;
+
+        return AppleMailFlagColor.Red;
+    }
 }

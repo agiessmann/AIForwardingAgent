@@ -1,5 +1,6 @@
+using AiForwardingAgent.AgentServices.Models;
 using System.ComponentModel.DataAnnotations;
-using AiForwardingAgent.AgentServices;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AiForwardingAgent.Data.Models;
 
@@ -8,19 +9,33 @@ public class FreightRequest
     public int Id { get; set; }
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public FreightRequestStatus Status { get; set; } = FreightRequestStatus.New;
+    
+    public Email? FreightRequestEmail { get; set; } = new Email();
+    
+    public Shipment? Shipment { get; set; } = new Shipment();
+    
+    public Customer? Customer { get; set; } = new Customer();
+    
+    public string? CustomerReference { get; set; }
 
-    // Optional: Original-E-Mail zur Nachvollziehbarkeit
-    [MaxLength(100)]
-    public string? SourceEmailText { get; set; }
+    public decimal? Confidence { get; set; }
 
-    [MaxLength(10)]
-    public string? SourceMessageId { get; set; }
+    [MaxLength(4000)]
+    public string? Reason { get; set; }
 
-    public TransportMode? TransportMode { get; set; }
-    public ShipmentType? ShipmentType { get; set; }
+    // Persisted snapshot of missing information to keep all DTO data retrievable from DB.
+    public string? MissingInformationJson { get; set; }
+
+    [NotMapped]
+    public FreightRequestValidationResult? ValidationResult { get; set; } = new FreightRequestValidationResult();
+
+    public bool IsFreightRequest { get; set; }
     public bool? QuotationRequested { get; set; }
 
-    public DateOnly? PickupDate { get; set; }
+    public List<FreightPackage> Packages { get; set; } = [];
+
+    /*public DateOnly? PickupDate { get; set; }
     public DateOnly? DeliveryDate { get; set; }
 
     public string? Incoterm { get; set; }
@@ -58,9 +73,15 @@ public class FreightRequest
 
     public int? PickupLocationId { get; set; }
     public FreightLocation? PickupLocation { get; set; }
-
     public int? DeliveryLocationId { get; set; }
     public FreightLocation? DeliveryLocation { get; set; }
+    
+    public int? OriginTermId { get; set; }
+    public TradeTerm? OriginTerm { get; set; }
 
+    public int? DestinationTermId { get; set; }
+    public TradeTerm? DestinationTerm { get; set; }
     public List<FreightPackage> Packages { get; set; } = [];
+    */
+    
 }

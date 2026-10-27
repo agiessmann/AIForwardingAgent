@@ -4,37 +4,37 @@ namespace AiForwardingAgent.Data.Services;
 
 public interface IFreightLocationService
 {
-    Task<FreightLocation> CreateFreightLocationAsync(FreightLocation freightLocation);
-    Task<FreightLocation?> GetFreightLocationByIdAsync(int id);
-    Task<IEnumerable<FreightLocation>> GetAllFreightLocationsAsync();
-    Task<FreightLocation> UpdateFreightLocationAsync(FreightLocation freightLocation);
-    Task<bool> DeleteFreightLocationAsync(FreightLocation freightLocation);
+    Task<Location> CreateFreightLocationAsync(Location freightLocation);
+    Task<Location?> GetFreightLocationByIdAsync(int id);
+    Task<IEnumerable<Location>> GetAllFreightLocationsAsync();
+    Task<Location> UpdateFreightLocationAsync(Location freightLocation);
+    Task<bool> DeleteFreightLocationAsync(Location freightLocation);
 }
 
-public class FreightLocationService(IRepositoryService<FreightLocation> repositoryService) : IFreightLocationService
+public class FreightLocationService(IRepositoryService<Location> repositoryService) : IFreightLocationService
 {
     // CRUD operations for FreightLocation entity
-    public async Task<FreightLocation> CreateFreightLocationAsync(FreightLocation freightLocation)
+    public async Task<Location> CreateFreightLocationAsync(Location freightLocation)
     {
         return await repositoryService.Create(freightLocation);
     }  
     
-    public async Task<FreightLocation?> GetFreightLocationByIdAsync(int id)
+    public async Task<Location?> GetFreightLocationByIdAsync(int id)
     {
         return await repositoryService.GetById(id);
     }
     
-    public async Task<IEnumerable<FreightLocation>> GetAllFreightLocationsAsync()
+    public async Task<IEnumerable<Location>> GetAllFreightLocationsAsync()
     {
         return await repositoryService.GetAll();
     }
     
-    public async Task<FreightLocation> UpdateFreightLocationAsync(FreightLocation freightLocation)
+    public async Task<Location> UpdateFreightLocationAsync(Location freightLocation)
     {
         return await repositoryService.Update(freightLocation);
     }
     
-    public async Task<bool> DeleteFreightLocationAsync(FreightLocation freightLocation)
+    public async Task<bool> DeleteFreightLocationAsync(Location freightLocation)
     {
         return  await repositoryService.Delete(freightLocation);
     }

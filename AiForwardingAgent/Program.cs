@@ -1,4 +1,6 @@
 using AiForwardingAgent.AgentServices;
+using AiForwardingAgent.BusinessLogic.CheckPostalCode;
+using AiForwardingAgent.BusinessLogic.RouteLocationResolver;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
@@ -8,10 +10,13 @@ using AiForwardingAgent.Components;
 using AiForwardingAgent.Data;
 using AiForwardingAgent.Data.Services;
 using AiForwardingAgent.EmailService;
+using AiForwardingAgent.ForwardingSkills;
+using AiForwardingAgent.Services;
 using Microsoft.Agents.AI.Hosting;
 
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using OpenAI.Chat;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,6 +59,7 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IFreightRequestService, FreightRequestService>();
 builder.Services.AddScoped<IFreightLocationService, FreightLocationService>();
 builder.Services.AddScoped<IFreightPackageService, FreightPackageService>();
+builder.Services.AddScoped<IFreightRequestCheckService, FreightRequestCheckService>();
 
 
 // DI for E Mail Service
@@ -65,8 +71,25 @@ builder.Services.AddSingleton<IEmailMailboxService>(sp => sp.GetRequiredService<
 builder.Services.AddSingleton<IEmailSender>(sp => sp.GetRequiredService<EMailMailboxService>());
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>>(sp => sp.GetRequiredService<EMailMailboxService>());
 
+// DI for Skills / Business Logic
+builder.Services.AddScoped<IFreightRequirementMatrixService, FreightRequirementMatrixService>();
+//builder.Services.AddScoped<ICheckPostalCodeService, CheckPostalCodeService>();
+builder.Services.AddHttpClient<ICheckPostalCodeService, CheckPostalCodeService>();
+builder.Services.AddHttpClient<ILocationResolver, LocationResolver>();
+    
+
 // DI For Agents
 // ChatClient registrieren
+
+var apiKey = builder.Configuration["OPENAI_API_KEY"] ?? throw new InvalidOperationException("OPENAI_API_KEY fehlt.");
+
+builder.Services.AddKeyedSingleton<IChatClient>(
+    "gpt-5.4-mini",
+    (_, _) => new ChatClient(
+        model: "gpt-5.4-mini",
+        apiKey: apiKey)
+        .AsIChatClient());
+
 builder.Services.AddKeyedSingleton<IChatClient>(
     "mistral",
     (_, _) => new OllamaChatClient(
@@ -96,12 +119,18 @@ builder.Services.AddAIAgent(
 builder.Services.AddAIAgent(
     name: "freight-request-check-agent",
     instructions: "You are an AI assistant working for an international freight forwarding company. Determine whether the email is a NEW freight transportation request. Return ONLY the JSON object.",
-    chatClientServiceKey: "qwen3.6");
+    chatClientServiceKey: "gpt-5.4-mini");
 
 
 // AgentServices
 builder.Services.AddScoped<IFreightRequestAgentService, FreightRequestAgentService>();
 builder.Services.AddScoped<IFreightRequestAnalyzeAgentService, FreightRequestAnalyzeAgentService>();
+builder.Services.AddScoped<IFreightRequestMissingInformationAgentService, FreightRequestMissingInformationAgentService>();
+builder.Services.AddScoped<IFreightRequestMissingInformationReplyAgentService, FreightRequestMissingInformationReplyAgentService>();
+
+// AI Assistant Session
+builder.Services.AddScoped<AiAssistantSession>();
+
 
 var app = builder.Build();
 

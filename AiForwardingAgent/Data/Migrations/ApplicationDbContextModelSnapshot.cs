@@ -128,6 +128,42 @@ namespace AiForwardingAgent.Data.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("AiForwardingAgent.Data.Models.Email", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EmailRecipient")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("EmailSender")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int?>("MessageId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Emails");
+                });
+
             modelBuilder.Entity("AiForwardingAgent.Data.Models.EmailSenderInformation", b =>
                 {
                     b.Property<int>("EmailSenderInformationId")
@@ -178,9 +214,37 @@ namespace AiForwardingAgent.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("CountryCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CountryName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
                     b.Property<string>("PostalCode")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
+
+                    b.Property<int?>("PostalCodeMatchQuality")
+                        .HasColumnType("int");
+
+                    b.Property<double?>("PostalCodeSimilarity")
+                        .HasColumnType("float");
+
+                    b.Property<string>("ResolvedCity")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ResolvedPostalCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("State")
                         .HasMaxLength(100)
@@ -251,9 +315,8 @@ namespace AiForwardingAgent.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("ContainerType")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<decimal?>("Confidence")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -262,8 +325,203 @@ namespace AiForwardingAgent.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("CustomerReference")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("FreightRequestEmailId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsFreightRequest")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MissingInformationJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool?>("QuotationRequested")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<int?>("ShipmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("FreightRequestEmailId");
+
+                    b.HasIndex("ShipmentId");
+
+                    b.ToTable("FreightRequests");
+                });
+
+            modelBuilder.Entity("AiForwardingAgent.Data.Models.FreightRequestCheck", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Confidence")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("EmailText")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsFreightRequest")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MessageId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Subject")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("FreightRequestChecks");
+                });
+
+            modelBuilder.Entity("AiForwardingAgent.Data.Models.Location", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Company")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CountryCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CountryName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
+                    b.Property<string>("PostalCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int?>("PostalCodeMatchQuality")
+                        .HasColumnType("int");
+
+                    b.Property<double?>("PostalCodeSimilarity")
+                        .HasColumnType("float");
+
+                    b.Property<string>("ResolvedCity")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ResolvedPostalCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("State")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Locations");
+                });
+
+            modelBuilder.Entity("AiForwardingAgent.Data.Models.Package", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("FreightRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("GoodsDescription")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("HeightCm")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("LengthCm")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PackageType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<bool?>("Stackable")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("TotalWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("WeightPerPackageKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("WidthCm")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FreightRequestId");
+
+                    b.ToTable("Packages");
+                });
+
+            modelBuilder.Entity("AiForwardingAgent.Data.Models.Shipment", b =>
+                {
+                    b.Property<int>("ShipmentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ShipmentId"));
+
+                    b.Property<string>("ContainerType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CustomerReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<bool?>("CustomsRequired")
                         .HasColumnType("bit");
@@ -272,62 +530,58 @@ namespace AiForwardingAgent.Data.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("DangerousGoodsDetails")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateOnly?>("DeliveryDate")
                         .HasColumnType("date");
 
-                    b.Property<int?>("DeliveryLocationId")
+                    b.Property<int?>("DeliveryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DestinationTermId")
                         .HasColumnType("int");
 
                     b.Property<string>("GoodsDescription")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<decimal?>("GrossWeightKg")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("HsCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Incoterm")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<decimal?>("LoadingMeters")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("MaximumTemperatureCelsius")
-                        .HasPrecision(8, 2)
-                        .HasColumnType("decimal(8,2)");
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("MinimumTemperatureCelsius")
-                        .HasPrecision(8, 2)
-                        .HasColumnType("decimal(8,2)");
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("OriginTermId")
+                        .HasColumnType("int");
 
                     b.Property<DateOnly?>("PickupDate")
                         .HasColumnType("date");
 
-                    b.Property<int?>("PickupLocationId")
+                    b.Property<int?>("PickupId")
                         .HasColumnType("int");
 
                     b.Property<bool?>("QuotationRequested")
                         .HasColumnType("bit");
 
-                    b.Property<int?>("ShipmentType")
+                    b.Property<int?>("RequestId")
                         .HasColumnType("int");
 
-                    b.Property<string>("SourceEmailText")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("SourceMessageId")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                    b.Property<int?>("ShipmentType")
+                        .HasColumnType("int");
 
                     b.Property<string>("SpecialInstructions")
                         .HasMaxLength(100)
@@ -343,18 +597,40 @@ namespace AiForwardingAgent.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal?>("VolumeM3")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("ShipmentId");
+
+                    b.HasIndex("DeliveryId");
+
+                    b.HasIndex("DestinationTermId");
+
+                    b.HasIndex("OriginTermId");
+
+                    b.HasIndex("PickupId");
+
+                    b.ToTable("Shipments");
+                });
+
+            modelBuilder.Entity("AiForwardingAgent.Data.Models.TradeTerm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Incoterm")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("NamedPlace")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("DeliveryLocationId");
-
-                    b.HasIndex("PickupLocationId");
-
-                    b.ToTable("FreightRequests");
+                    b.ToTable("TradeTermInformations");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -516,24 +792,61 @@ namespace AiForwardingAgent.Data.Migrations
                 {
                     b.HasOne("AiForwardingAgent.Data.Models.Customer", "Customer")
                         .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .HasForeignKey("CustomerId");
 
-                    b.HasOne("AiForwardingAgent.Data.Models.FreightLocation", "DeliveryLocation")
+                    b.HasOne("AiForwardingAgent.Data.Models.Email", "FreightRequestEmail")
                         .WithMany()
-                        .HasForeignKey("DeliveryLocationId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .HasForeignKey("FreightRequestEmailId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.HasOne("AiForwardingAgent.Data.Models.FreightLocation", "PickupLocation")
+                    b.HasOne("AiForwardingAgent.Data.Models.Shipment", "Shipment")
                         .WithMany()
-                        .HasForeignKey("PickupLocationId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .HasForeignKey("ShipmentId");
 
                     b.Navigation("Customer");
 
-                    b.Navigation("DeliveryLocation");
+                    b.Navigation("FreightRequestEmail");
 
-                    b.Navigation("PickupLocation");
+                    b.Navigation("Shipment");
+                });
+
+            modelBuilder.Entity("AiForwardingAgent.Data.Models.Package", b =>
+                {
+                    b.HasOne("AiForwardingAgent.Data.Models.FreightRequest", "FreightRequest")
+                        .WithMany()
+                        .HasForeignKey("FreightRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FreightRequest");
+                });
+
+            modelBuilder.Entity("AiForwardingAgent.Data.Models.Shipment", b =>
+                {
+                    b.HasOne("AiForwardingAgent.Data.Models.Location", "Delivery")
+                        .WithMany()
+                        .HasForeignKey("DeliveryId");
+
+                    b.HasOne("AiForwardingAgent.Data.Models.TradeTerm", "DestinationTerm")
+                        .WithMany()
+                        .HasForeignKey("DestinationTermId");
+
+                    b.HasOne("AiForwardingAgent.Data.Models.TradeTerm", "OriginTerm")
+                        .WithMany()
+                        .HasForeignKey("OriginTermId");
+
+                    b.HasOne("AiForwardingAgent.Data.Models.Location", "Pickup")
+                        .WithMany()
+                        .HasForeignKey("PickupId");
+
+                    b.Navigation("Delivery");
+
+                    b.Navigation("DestinationTerm");
+
+                    b.Navigation("OriginTerm");
+
+                    b.Navigation("Pickup");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

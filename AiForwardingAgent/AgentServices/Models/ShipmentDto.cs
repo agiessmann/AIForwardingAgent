@@ -1,16 +1,20 @@
 using System.Text.Json;
 using AiForwardingAgent.AgentServices;
+using AiForwardingAgent.Data.Models;
+using AiForwardingAgent.ForwardingSkills;
 
-namespace AiForwardingAgent.AgentServices;
+namespace AiForwardingAgent.AgentServices.Models;
 
-public class ShipmentInformation
+public class ShipmentDto
 {
     public int? RequestId { get; set; }
     public TransportMode? TransportMode { get; init; }
     public ShipmentType? ShipmentType { get; init; }
     public bool? QuotationRequested { get; init; }
-    public LocationInformation? Pickup { get; init; }
-    public LocationInformation? Delivery { get; init; }
+    public LocationDto? Pickup { get; init; }
+    public LocationDto? Delivery { get; init; }
+    public TradeTermDto? OriginTerm { get; init; }
+    public TradeTermDto? DestinationTerm { get; init; }
     public DateOnly? PickupDate { get; init; }
     public DateOnly? DeliveryDate { get; init; }
     public string? Incoterm { get; init; }
@@ -22,7 +26,7 @@ public class ShipmentInformation
     public decimal? LoadingMeters { get; init; }
 
     // Einzelne Packstücke / Packstückgruppen
-    public List<PackageInformation> Packages { get; init; } = [];
+    public List<PackageDto>? Packages { get; init; } = [];
     public string? ContainerType { get; init; }
     public bool? DangerousGoods { get; init; }
     public string? DangerousGoodsDetails { get; init; }
@@ -34,16 +38,14 @@ public class ShipmentInformation
     public string? HsCode { get; init; }
     public string? CustomerReference { get; init; }
     public string? SpecialInstructions { get; init; }
-
-    public string? MessageId { get; set; } = string.Empty;
-    public string? MessageText { get; set; } = string.Empty;
+    
     
     private static JsonSerializerOptions Options => new JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = true
     };
-    public static ShipmentInformation? FromJson(string json)
+    public static ShipmentDto? FromJson(string json)
     {
-        return JsonSerializer.Deserialize<ShipmentInformation>(json, Options);
+        return JsonSerializer.Deserialize<ShipmentDto>(json, Options);
     }
 }

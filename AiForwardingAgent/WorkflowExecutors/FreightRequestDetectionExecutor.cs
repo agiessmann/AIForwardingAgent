@@ -1,18 +1,22 @@
 using AiForwardingAgent.AgentServices;
+using AiForwardingAgent.AgentServices.Models;
 using Microsoft.Agents.AI.Workflows;
 
 namespace AiForwardingAgent.WorkflowExecutors;
 
 internal sealed partial class FreightRequestDetectionExecutor(IFreightRequestAgentService freightRequestAgentService)
-    : Executor<FreightRequestEmail, FreightRequestCheckResult>("FreightRequestDetectionExecutor")
+    : Executor<FreightRequestDto, FreightRequestDto>("FreightRequestDetectionExecutor")
 {
     [MessageHandler]
-    public override async ValueTask<FreightRequestCheckResult> HandleAsync(FreightRequestEmail message, IWorkflowContext context,
+    public override async ValueTask<FreightRequestDto> HandleAsync(FreightRequestDto message, IWorkflowContext context,
         CancellationToken cancellationToken = new CancellationToken())
     {
-        var subject = message.Subject;
-        var body = message.Body;
-        var messageId = message.MessageId;
+        var email = message.FreightRequestEmail 
+                    ?? throw new ArgumentNullException(nameof(message.FreightRequestEmail), "FreightRequestEmail cannot be null.");
+        
+        var subject = email.Subject;
+        var body = email;
+        var messageId =  email.MessageId;
         // check for valid freight request in the email subject and body
         if(subject is null) 
         {
@@ -29,7 +33,7 @@ internal sealed partial class FreightRequestDetectionExecutor(IFreightRequestAge
             throw new ArgumentNullException(nameof(messageId), "Email MessageId cannot be null.");
         }
         
-        var result = await freightRequestAgentService.CheckIfFreightRequestAsync(subject, body, messageId, cancellationToken);
+        var result = await freightRequestAgentService.CheckIfFreightRequestAsync(message, cancellationToken);
         return await ValueTask.FromResult(result);
     }
 }

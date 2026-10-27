@@ -1,3 +1,4 @@
+using AiForwardingAgent.AgentServices.Models;
 using AiForwardingAgent.Data.Models;
 using Microsoft.Agents.AI;
 
@@ -5,57 +6,43 @@ namespace AiForwardingAgent.AgentServices;
 
 public interface IFreightRequestAnalyzeAgentService
 {
-    Task<ShipmentInformation> AnalyzeFreightRequestAsync(
-        string emailSubject,
-        string emailText,
-        string messageId,
+    Task<FreightRequestDto> AnalyzeFreightRequestAsync(
+        FreightRequestDto freightRequest,
         CancellationToken cancellationToken = default);
 }
 
 public class FreightRequestAnalyzeAgentService([FromKeyedServices("freight-request-check-agent")] AIAgent agent) : IFreightRequestAnalyzeAgentService
 {
-    public async Task<ShipmentInformation> AnalyzeFreightRequestAsync(
-        string emailSubject,
-        string emailText,
-        string messageId,
+    public async Task<FreightRequestDto> AnalyzeFreightRequestAsync(
+        FreightRequestDto freightRequest,
         CancellationToken cancellationToken = default)
     {
-        var prompt = BuildExtractFreightRequestDetailsPrompt(emailSubject, emailText);
-        var result = await agent.RunAsync(prompt, cancellationToken: cancellationToken);
-        var shipmentInformation = ShipmentInformation.FromJson(result.ToString());
-        //freightRequestCheckResult?.MessageId = messageId;
+        ArgumentNullException.ThrowIfNull(freightRequest);
+
+        var email = freightRequest.FreightRequestEmail
+                    ?? throw new ArgumentNullException(nameof(freightRequest.FreightRequestEmail));
+
+        if (string.IsNullOrWhiteSpace(email.Subject))
+            throw new ArgumentException("Email subject cannot be null or empty.", nameof(freightRequest));
+
+        if (string.IsNullOrWhiteSpace(email.Body))
+            throw new ArgumentException("Email body cannot be null or empty.", nameof(freightRequest));
+
         
-        if (shipmentInformation != null) return shipmentInformation;
-        return new ShipmentInformation
+        var prompt = BuildExtractFreightRequestDetailsPrompt(email.Subject, email.Body);
+        var result = await agent.RunAsync(prompt, cancellationToken: cancellationToken);
+        var shipmentInformation = ShipmentDto.FromJson(result.ToString());
+        if (shipmentInformation is null)
         {
-            TransportMode = null,
-            ShipmentType = null,
-            QuotationRequested = null,
-            Pickup = new LocationInformation(),
-            Delivery = new LocationInformation(),
-            PickupDate = null,
-            DeliveryDate = null,
-            Incoterm = null,
-            GoodsDescription = null,
-            GrossWeightKg = null,
-            VolumeM3 = null,
-            LoadingMeters = null,
-            Packages = new List<PackageInformation>(),
-            ContainerType = null,
-            DangerousGoods = null,
-            DangerousGoodsDetails = null,
-            TemperatureControlled = null,
-            MinimumTemperatureCelsius = null,
-            MaximumTemperatureCelsius = null,
-            Stackable = null,
-            CustomsRequired = null,
-            HsCode = null,
-            CustomerReference = null,
-            SpecialInstructions = null
-        };
+            return freightRequest;
+        }
+        freightRequest.ShipmentInformation = shipmentInformation;
+        
+        
+        return freightRequest;
     }
     
-    private string BuildExtractFreightRequestDetailsPrompt(string emailText, string emailSubject)
+    private string BuildExtractFreightRequestDetailsPrompt(string emailSubject, string emailText)
 {
     return $@"
     You are an AI assistant working for an international freight forwarding company.
@@ -221,6 +208,152 @@ Typical mappings:
 
     If only part of a location is available, populate only those fields.
 
+    ==================================================
+    TRADE TERMS / TRANSPORT BOUNDARIES
+    ==================================================
+
+    OriginTerm and DestinationTerm describe explicitly stated commercial
+    transport boundaries or Incoterm conditions at the origin and destination
+    side of the requested transport.
+
+    Each TradeTermInformation contains:
+
+    - Incoterm
+    - NamedPlace
+
+    Allowed Incoterm values are:
+
+    - EXW
+    - FCA
+    - FAS
+    - FOB
+    - CFR
+    - CIF
+    - CPT
+    - CIP
+    - DAP
+    - DPU
+    - DDP
+
+    OriginTerm:
+
+    Populate OriginTerm when the email explicitly states an Incoterm or
+    commercial transport condition describing where the requested transport
+    starts.
+
+    Examples:
+
+    ""FOB Hamburg""
+    ""ab FOB Hamburg""
+    ""from FOB Hamburg""
+    ""FCA Stuttgart""
+    ""EXW Munich""
+
+    Example:
+
+    ""Shipment FOB Hamburg to Cape Town""
+
+    Return:
+
+    ""OriginTerm"": {{
+      ""Incoterm"": ""FOB"",
+      ""NamedPlace"": ""Hamburg""
+    }}
+
+    DestinationTerm:
+
+    Populate DestinationTerm when the email explicitly states an Incoterm or
+    commercial transport condition describing where the requested transport
+    ends.
+
+    Examples:
+
+    ""CFR Cape Town""
+    ""bis CFR Cape Town""
+    ""to CIF Durban""
+    ""DAP Johannesburg""
+    ""DDP Pretoria""
+
+    Example:
+
+    ""Shipment Hamburg to CFR Cape Town""
+
+    Return:
+
+    ""DestinationTerm"": {{
+      ""Incoterm"": ""CFR"",
+      ""NamedPlace"": ""Cape Town""
+    }}
+
+    If both sides are explicitly stated, populate both.
+
+    Example:
+
+    ""Please quote from FOB Hamburg to CFR Cape Town.""
+
+    Return:
+
+    ""OriginTerm"": {{
+      ""Incoterm"": ""FOB"",
+      ""NamedPlace"": ""Hamburg""
+    }},
+    ""DestinationTerm"": {{
+      ""Incoterm"": ""CFR"",
+      ""NamedPlace"": ""Cape Town""
+    }}
+
+    Do NOT assume that only one Incoterm can occur in a freight request.
+
+    The email may describe the requested transport using two commercial
+    boundaries, for example:
+
+    FOB Hamburg -> CFR Cape Town
+    FCA Stuttgart -> DAP Johannesburg
+    EXW Munich -> DDP Pretoria
+
+    NamedPlace must only be populated when the place is explicitly associated
+    with the Incoterm.
+
+    Example:
+
+    ""FOB Hamburg""
+
+    Return:
+
+    ""Incoterm"": ""FOB""
+    ""NamedPlace"": ""Hamburg""
+
+    Example:
+
+    ""FOB terms, shipment from Hamburg""
+
+    Do NOT automatically associate Hamburg with FOB unless the wording clearly
+    links Hamburg to the Incoterm.
+
+    If an Incoterm is explicitly stated but its named place is not stated:
+
+    ""OriginTerm"": {{
+      ""Incoterm"": ""FOB"",
+      ""NamedPlace"": null
+    }}
+
+    or:
+
+    ""DestinationTerm"": {{
+      ""Incoterm"": ""CFR"",
+      ""NamedPlace"": null
+    }}
+
+    If no origin trade term is explicitly stated:
+
+    ""OriginTerm"": null
+
+    If no destination trade term is explicitly stated:
+
+    ""DestinationTerm"": null
+
+    Do NOT infer an Incoterm from transport mode, route, pickup address,
+    delivery address, container type, or customer location.
     ==================================================
     DATES
     ==================================================
@@ -620,6 +753,24 @@ Typical mappings:
         ""State"": null,
         ""Country"": null
       }},
+
+       ""OriginTerm"": null,
+       ""DestinationTerm"": null
+        If OriginTerm is present, it MUST have exactly this structure:
+
+        {{
+          ""Incoterm"": null,
+          ""NamedPlace"": null
+        }}
+
+        If DestinationTerm is present, it MUST have exactly this structure:
+
+        {{
+          ""Incoterm"": null,
+          ""NamedPlace"": null
+        }}
+
+        OriginTerm and DestinationTerm themselves may be null.
 
       ""PickupDate"": null,
       ""DeliveryDate"": null,

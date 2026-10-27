@@ -1,0 +1,84 @@
+@page "/aiassistant"
+@implements IDisposable
+@rendermode InteractiveServer
+
+@inject AiForwardingAgent.Services.AiAssistantSession AssistantSession
+
+<PageTitle>AI Assistant</PageTitle>
+
+<h1>AI Assistant</h1>
+
+<div class="mb-3 d-flex gap-2">
+    <button class="btn btn-primary" @onclick="StartAsync" disabled="@AssistantSession.IsRunning">
+        Start
+    </button>
+
+    <button class="btn btn-warning" @onclick="StopAsync" disabled="@(!AssistantSession.IsRunning)">
+        Stop
+    </button>
+
+    <button class="btn btn-outline-secondary" @onclick="ClearMessages">
+        Leeren
+    </button>
+</div>
+
+<div class="mb-3">
+    <strong>Status:</strong> @(AssistantSession.IsRunning ? "Läuft" : "Gestoppt")
+</div>
+
+<select class="form-select" size="15" style="min-height: 350px;" multiple>
+    @foreach (var message in _messages)
+    {
+        <option>@message</option>
+    }
+</select>
+
+@code {
+    private List<string> _messages = [];
+
+    protected override void OnInitialized()
+    {
+        RefreshMessages();
+        AssistantSession.MessagesChanged += OnMessagesChanged;
+    }
+
+    private async Task StartAsync()
+    {
+        await AssistantSession.StartAsync();
+        RefreshMessages();
+    }
+
+    private async Task StopAsync()
+    {
+        await AssistantSession.StopAsync();
+        RefreshMessages();
+    }
+
+    private void ClearMessages()
+    {
+        AssistantSession.ClearMessages();
+        RefreshMessages();
+    }
+
+    private void OnMessagesChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            RefreshMessages();
+            StateHasChanged();
+        });
+    }
+
+    private void RefreshMessages()
+    {
+        _messages = AssistantSession
+            .GetMessages()
+            .Reverse()
+            .ToList();
+    }
+
+    public void Dispose()
+    {
+        AssistantSession.MessagesChanged -= OnMessagesChanged;
+    }
+}

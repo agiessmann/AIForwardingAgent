@@ -1,13 +1,11 @@
+using AiForwardingAgent.AgentServices.Models;
 using Microsoft.Agents.AI;
 
 namespace AiForwardingAgent.AgentServices;
 
 public interface IFreightRequestAgentService
 {
-    Task<FreightRequestCheckResult> CheckIfFreightRequestAsync(
-        string emailSubject,
-        string emailText,
-        string messageId,
+    Task<FreightRequestDto> CheckIfFreightRequestAsync(FreightRequestDto freightRequestDto,
         CancellationToken cancellationToken = default);
 }
 
@@ -15,26 +13,46 @@ public class FreightRequestAgentService([FromKeyedServices("freight-request-chec
 {
     
     // check if text is a freight request
-    public async Task<FreightRequestCheckResult> CheckIfFreightRequestAsync(
-        string emailSubject,
-        string emailText,
-        string messageId,
+    public async Task<FreightRequestDto> CheckIfFreightRequestAsync(
+        FreightRequestDto freightRequestDto,
         CancellationToken cancellationToken = default)
     {
-        var prompt = BuildIsFreightRequestPrompt(emailSubject, emailText);
+        ArgumentNullException.ThrowIfNull(freightRequestDto);
+
+        var email = freightRequestDto.FreightRequestEmail
+                    ?? throw new ArgumentNullException(nameof(freightRequestDto.FreightRequestEmail));
+
+        if (string.IsNullOrWhiteSpace(email.Subject))
+            throw new ArgumentException("Email subject cannot be null or empty.", nameof(freightRequestDto));
+
+        if (string.IsNullOrWhiteSpace(email.Body))
+            throw new ArgumentException("Email body cannot be null or empty.", nameof(freightRequestDto));
+
+        var prompt = BuildIsFreightRequestPrompt(email.Subject, email.Body);
+
         var result = await agent.RunAsync(prompt, cancellationToken: cancellationToken);
-        var freightRequestCheckResult = FreightRequestCheckResult.FromJson(result.ToString());
-        freightRequestCheckResult?.MessageId = messageId;
-        freightRequestCheckResult?.Subject = emailSubject;
-        freightRequestCheckResult?.EmailText = emailText;
-        if (freightRequestCheckResult != null) return freightRequestCheckResult;
-        return new FreightRequestCheckResult
+        var agentResponse = FreightRequestDto.FromJson(result.ToString());
+
+        // Fallback: falls Agent kein parsebares JSON liefert, Input beibehalten
+        if (agentResponse is null)
         {
-            IsFreightRequest = false,
-            Confidence = 0.0m,
-            Reason = "Failed to parse AI response.",
-            MessageId = "0"
+            return freightRequestDto;
+        }
+
+        // Mail-Kontext aus Eingang behalten (Agent soll nur Klassifikation liefern)
+        agentResponse.FreightRequestEmail = new EmailDto
+        {
+            Subject = email.Subject,
+            Body = email.Body,
+            MessageId = email.MessageId,
+            EmailSender = email.EmailSender,
+            EmailRecipient = email.EmailRecipient
         };
+
+        // Optional: falls Agent CustomerReference nicht setzt, vorhandenen Wert übernehmen
+        agentResponse.CustomerReference ??= freightRequestDto.CustomerReference;
+
+        return agentResponse;
     }
 
     // prompts
