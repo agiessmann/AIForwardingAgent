@@ -1,5 +1,6 @@
 using AiForwardingAgent.AgentServices;
 using AiForwardingAgent.AgentServices.Models;
+using AiForwardingAgent.Data.Models;
 using AiForwardingAgent.Data.Services;
 using AiForwardingAgent.ForwardingSkills;
 using Microsoft.Agents.AI.Workflows;
@@ -8,8 +9,9 @@ namespace AiForwardingAgent.WorkflowExecutors;
 
 public class CreateFreightRequestToDbExecutor(
     IFreightRequestService freightRequestService, 
-    IFreightRequirementMatrixService freightRequirementMatrixService)
-    : Executor<FreightRequestDto, FreightRequestDto>("CreateFreightRequestToDbExecutor")
+    IFreightRequirementMatrixService freightRequirementMatrixService,
+    string id = "CreateFreightRequestToDbExecutor")
+    : Executor<FreightRequestDto, FreightRequestDto>(id)
 {
     public override async ValueTask<FreightRequestDto> HandleAsync(FreightRequestDto message, IWorkflowContext context,
         CancellationToken cancellationToken = new CancellationToken())
@@ -17,7 +19,14 @@ public class CreateFreightRequestToDbExecutor(
         if (message.ShipmentInformation != null)
         {
             var requirementMatrix =  await freightRequirementMatrixService.ValidateAsync(message.ShipmentInformation, cancellationToken);
-            message.MissingInformation = requirementMatrix.MissingInformation;
+            var declined = (message.DeclinedQuestionKeys ?? [])
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            message.MissingInformation = requirementMatrix.MissingInformation
+                .Where(x => x.Level == RequirementLevel.Required || !declined.Contains(x.QuestionKey))
+                .ToList();
+            message.Status = message.MissingInformation.All(x => x.Level != RequirementLevel.Required)
+                ? FreightRequestStatus.InProgress
+                : FreightRequestStatus.MissingInformation;
         }
         
         var freightRequest = FreightRequestMapper.ToEntity(message);

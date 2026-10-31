@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using AiForwardingAgent.AgentServices;
+using AiForwardingAgent.AgentServices.Enums;
 using AiForwardingAgent.AgentServices.Models;
-using AiForwardingAgent.Data.Models;
 using AiForwardingAgent.Data.Services;
 using AiForwardingAgent.EmailService;
 using AiForwardingAgent.ForwardingSkills;
@@ -21,6 +21,9 @@ public sealed class AiAssistantSession : IAsyncDisposable
     private readonly IFreightLocationService _freightLocationService;
     private readonly IFreightRequirementMatrixService _freightRequirementMatrixService;
     private readonly IFreightRequestCheckService _freightRequestCheckService;
+    private readonly IFreightRequestReplyAnalysisAgent _freightRequestReplyAnalysisAgentService;
+    private readonly IFreightRequestUpdateService _freightRequestUpdateService;
+
     private readonly ConcurrentQueue<string> _messages = new();
     private readonly SemaphoreSlim _lifecycleLock = new(1, 1);
 
@@ -38,7 +41,9 @@ public sealed class AiAssistantSession : IAsyncDisposable
         IFreightRequestService freightRequestService, 
         IFreightLocationService freightLocationService, 
         IFreightRequirementMatrixService freightRequirementMatrixService, 
-        IFreightRequestCheckService freightRequestCheckService)
+        IFreightRequestCheckService freightRequestCheckService, 
+        IFreightRequestReplyAnalysisAgent freightRequestReplyAnalysisAgentService,
+        IFreightRequestUpdateService freightRequestUpdateService)
     {
         _emailMailboxService = emailMailboxService;
         _freightRequestMissingInformationAgentService = freightRequestMissingInformationAgentService;
@@ -49,6 +54,8 @@ public sealed class AiAssistantSession : IAsyncDisposable
         _freightLocationService = freightLocationService;
         _freightRequirementMatrixService = freightRequirementMatrixService;
         _freightRequestCheckService = freightRequestCheckService;
+        _freightRequestReplyAnalysisAgentService = freightRequestReplyAnalysisAgentService;
+        _freightRequestUpdateService = freightRequestUpdateService;
     }
 
     public bool IsRunning => _workerTask is { IsCompleted: false };
@@ -166,6 +173,44 @@ public sealed class AiAssistantSession : IAsyncDisposable
         }
     }
 
+    public ManualReviewRequest? PendingReview => _pendingReview?.Request;
+
+    public event Action? ReviewChanged;
+
+    private PendingReviewState? _pendingReview;
+
+    private async Task<ManualReviewDecision> AskReviewerAsync(ManualReviewRequest request, CancellationToken cancellationToken)
+    {
+        var pending = new PendingReviewState(request);
+        _pendingReview = pending;
+        AddMessage($"Manuelle Prüfung erforderlich für Anfrage {request.FreightRequest.FreightRequestId}: {request.Reason}");
+        ReviewChanged?.Invoke();
+
+        try
+        {
+            await using var registration = cancellationToken.Register(() => pending.Completion.TrySetCanceled(cancellationToken));
+            return await pending.Completion.Task;
+        }
+        finally
+        {
+            _pendingReview = null;
+            ReviewChanged?.Invoke();
+        }
+    }
+
+    public void CompleteReview(bool approved, string? comment = null)
+        => _pendingReview?.Completion.TrySetResult(new ManualReviewDecision(approved, comment));
+
+    private sealed record ManualReviewDecision(bool Approved, string? Comment);
+
+    private sealed class PendingReviewState(ManualReviewRequest request)
+    {
+        public ManualReviewRequest Request { get; } = request;
+
+        public TaskCompletionSource<ManualReviewDecision> Completion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
     private void AddMessage(string message)
     {
         _messages.Enqueue($"[{DateTime.Now:HH:mm:ss}] {message}");
@@ -192,20 +237,25 @@ public sealed class AiAssistantSession : IAsyncDisposable
         // Implement the workflow logic for the selected message here.
         // For example, you can read the message content and process it with the AI agent.
         var messageContent = await _emailMailboxService.ReadMessageContentAsync(message.Id, cancellationToken);
-        AddMessage($"Verarbeite E-Mail mit ID: {message.Id}. Inhalt: {messageContent}"); 
-        
+        AddMessage($"Verarbeite E-Mail mit ID: {message.Id}. Inhalt: {messageContent}");
 
 
-        var freightRequest = new FreightRequestDto()
+
+        var freightRequest = new FreightRequestDto();
+        freightRequest.FreightRequestEmailHistory = new List<EmailDto>
         {
-            FreightRequestEmail = new EmailDto
+            new EmailDto
             {
                 Subject = message.Subject,
                 Body = messageContent.BodyText,
                 MessageId = int.Parse(message.Id),
-                EmailSender = message.From
+                EmailSender = message.From,
+                EmailType = FreightRequestEmailType.OriginalEmail,
+                SentReceivedDate = message.ReceivedAt,
+                Direction = EmailDirection.Incoming
             }
         };
+        
         
         // Create Executors for the AI agent workflow and execute them as needed.
         var freightRequestMissingInformationDetectionExecutor = new FreightRequestMissingInformationDetectionExecutor(_freightRequestMissingInformationReplyAgentService);
@@ -218,10 +268,30 @@ public sealed class AiAssistantSession : IAsyncDisposable
             _freightRequestMissingInformationAgentService,
             _freightRequirementMatrixService,
             _freightRequestService);
+        var freightRequestAnalyzeMissingInformationExecutor = new FreightRequestAnalyzeMissingInformationExecutor(_freightRequestReplyAnalysisAgentService,
+            _freightRequestUpdateService);
+        
+        var persistReplyExecutor = new CreateFreightRequestToDbExecutor(_freightRequestService, _freightRequirementMatrixService, "PersistReplyToDbExecutor");
+        var replyMissingInformationEmailExecutor = new CreateFreightRequestMissingInfomationEmailExecutor(_emailMailboxService,
+            _freightRequestMissingInformationAgentService,
+            _freightRequirementMatrixService,
+            _freightRequestService,
+            "ReplyMissingInformationEmailExecutor");
+        var reviewRequestExecutor = new ManualReviewRequestExecutor();
+        var reviewPort = RequestPort.Create<ManualReviewRequest, ManualReviewResponse>("ManualReviewPort");
+        var reviewDecisionExecutor = new ManualReviewDecisionExecutor(_freightRequestService);
         
         // Build the workflow with conditional edges
         var workflow = new WorkflowBuilder(freightRequestMissingInformationDetectionExecutor)
-            .AddEdge(freightRequestMissingInformationDetectionExecutor, confirmationExecutor, GetConditionIsFreightRequestMissingInfo(expectedResult: true)) // If it's a freight request missing information response, go to confirmation
+            .AddEdge(freightRequestMissingInformationDetectionExecutor, freightRequestAnalyzeMissingInformationExecutor, GetConditionIsFreightRequestMissingInfo(expectedResult: true)) // If it's a freight request missing information response, go to confirmation
+            .AddEdge(freightRequestAnalyzeMissingInformationExecutor, persistReplyExecutor) // Updates are always persisted before the review decision
+            .AddEdge<FreightRequestDto>(persistReplyExecutor, confirmationExecutor, x => x is { RequiresManualReview: false } && IsProcessable(x))
+            .AddEdge<FreightRequestDto>(persistReplyExecutor, replyMissingInformationEmailExecutor, x => x is { RequiresManualReview: false } && !IsProcessable(x))
+            .AddEdge<FreightRequestDto>(persistReplyExecutor, reviewRequestExecutor, x => x is { RequiresManualReview: true })
+            .AddEdge(reviewRequestExecutor, reviewPort)
+            .AddEdge(reviewPort, reviewDecisionExecutor)
+            .AddEdge<FreightRequestDto>(reviewDecisionExecutor, confirmationExecutor, x => x is { RequiresManualReview: false } && IsProcessable(x))
+            .AddEdge<FreightRequestDto>(reviewDecisionExecutor, replyMissingInformationEmailExecutor, x => x is { RequiresManualReview: false } && !IsProcessable(x))
             .AddEdge(freightRequestMissingInformationDetectionExecutor, freightRequestDetectionExecutor, GetConditionIsFreightRequestMissingInfo(expectedResult: false)) // If it's not a freight request missing information response, go to detection
             .AddEdge(freightRequestDetectionExecutor ,createFreightRequestCheckExecutor, GetConditionIsFreightRequest(expectedResult: true)) // If it's a freight request, go to analyze
             .AddEdge(createFreightRequestCheckExecutor ,freightRequestAnalyzerExecutor) 
@@ -251,6 +321,15 @@ public sealed class AiAssistantSession : IAsyncDisposable
                     AddMessage($"Completed {complete.ExecutorId}: {complete.Data}");
                     break;
 
+                case RequestInfoEvent requestInfo:
+                    if (!requestInfo.Request.TryGetDataAs<ManualReviewRequest>(out var review))
+                        break;
+
+                    var decision = await AskReviewerAsync(review, cancellationToken);
+                    await run.SendResponseAsync(requestInfo.Request.CreateResponse(
+                        new ManualReviewResponse(review.FreightRequest, decision.Approved, decision.Comment)));
+                    break;
+
                 case WorkflowOutputEvent output:
                     AddMessage($"Workflow output: {output.Data}");
                     return;
@@ -262,6 +341,9 @@ public sealed class AiAssistantSession : IAsyncDisposable
         }
     }
     
+    private static bool IsProcessable(FreightRequestDto? request) =>
+        request?.MissingInformation?.All(x => x.Level != RequirementLevel.Required) ?? true;
+
     /// <summary>
     /// Creates a condition for messages based on the expected freight request detection result.
     /// </summary>

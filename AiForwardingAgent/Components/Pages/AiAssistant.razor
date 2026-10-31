@@ -26,6 +26,19 @@
     <strong>Status:</strong> @(AssistantSession.IsRunning ? "Läuft" : "Gestoppt")
 </div>
 
+@if (AssistantSession.PendingReview is { } review)
+{
+    <div class="alert alert-warning">
+        <h5>Manuelle Prüfung für Anfrage @review.FreightRequest.FreightRequestId</h5>
+        <pre style="white-space: pre-wrap">@review.Reason</pre>
+        <input class="form-control mb-2" placeholder="Kommentar (optional)" @bind="_reviewComment" />
+        <div class="d-flex gap-2">
+            <button class="btn btn-success" @onclick="() => CompleteReview(true)">Freigeben</button>
+            <button class="btn btn-danger" @onclick="() => CompleteReview(false)">Ablehnen</button>
+        </div>
+    </div>
+}
+
 <select class="form-select" size="15" style="min-height: 350px;" multiple>
     @foreach (var message in _messages)
     {
@@ -35,11 +48,21 @@
 
 @code {
     private List<string> _messages = [];
+    private string? _reviewComment;
+
+    private void CompleteReview(bool approved)
+    {
+        AssistantSession.CompleteReview(approved, _reviewComment);
+        _reviewComment = null;
+    }
+
+    private void OnReviewChanged() => _ = InvokeAsync(StateHasChanged);
 
     protected override void OnInitialized()
     {
         RefreshMessages();
         AssistantSession.MessagesChanged += OnMessagesChanged;
+        AssistantSession.ReviewChanged += OnReviewChanged;
     }
 
     private async Task StartAsync()
@@ -80,5 +103,6 @@
     public void Dispose()
     {
         AssistantSession.MessagesChanged -= OnMessagesChanged;
+        AssistantSession.ReviewChanged -= OnReviewChanged;
     }
 }

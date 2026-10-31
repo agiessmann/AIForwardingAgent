@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AiForwardingAgent.AgentServices.Enums;
 
 namespace AiForwardingAgent.AgentServices;
 
@@ -11,6 +12,12 @@ public class EmailDto
     public string EmailSender { get; set; } = string.Empty;
     
     public string EmailRecipient { get; set; } = string.Empty;
+    
+    public FreightRequestEmailType EmailType { get; set; } = FreightRequestEmailType.OriginalEmail;
+    
+    public DateTimeOffset? SentReceivedDate { get; set; }
+    
+    public EmailDirection Direction { get; set; } = EmailDirection.Incoming;
     
     private static JsonSerializerOptions Options => new JsonSerializerOptions
     {

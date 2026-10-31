@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AiForwardingAgent.AgentServices.Enums;
 using AiForwardingAgent.AgentServices.Models;
 using AiForwardingAgent.ForwardingSkills;
 using Microsoft.Agents.AI;
@@ -19,7 +20,12 @@ public class FreightRequestMissingInformationAgentService([FromKeyedServices("fr
     {
         if (freightRequest.MissingInformation != null)
         {
-            var prompt = BuildMissingInformationEmailPrompt(freightRequest.FreightRequestEmail.Body, freightRequest.MissingInformation);
+            if (freightRequest.FreightRequestEmailHistory == null) return string.Empty;
+            var email = freightRequest.FreightRequestEmailHistory.FirstOrDefault(e => e.EmailType == FreightRequestEmailType.OriginalEmail)
+                        ?? throw new ArgumentNullException(nameof(freightRequest.FreightRequestEmailHistory));
+
+            if (email.Body == null) return string.Empty;
+            var prompt = BuildMissingInformationEmailPrompt(email.Body, freightRequest.MissingInformation);
 
             var result = await agent.RunAsync(prompt, cancellationToken: cancellationToken);
             var json = EmailDto.FromJson(result.Text ?? throw new InvalidOperationException("No response from AI agent."));

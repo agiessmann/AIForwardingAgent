@@ -1,3 +1,4 @@
+using AiForwardingAgent.AgentServices.Enums;
 using AiForwardingAgent.AgentServices.Models;
 using AiForwardingAgent.Data.Models;
 using Microsoft.Agents.AI;
@@ -19,8 +20,9 @@ public class FreightRequestAnalyzeAgentService([FromKeyedServices("freight-reque
     {
         ArgumentNullException.ThrowIfNull(freightRequest);
 
-        var email = freightRequest.FreightRequestEmail
-                    ?? throw new ArgumentNullException(nameof(freightRequest.FreightRequestEmail));
+        if (freightRequest.FreightRequestEmailHistory == null) return freightRequest;
+        var email = freightRequest.FreightRequestEmailHistory.FirstOrDefault(e => e.EmailType == FreightRequestEmailType.OriginalEmail)
+                    ?? throw new ArgumentNullException(nameof(freightRequest.FreightRequestEmailHistory));
 
         if (string.IsNullOrWhiteSpace(email.Subject))
             throw new ArgumentException("Email subject cannot be null or empty.", nameof(freightRequest));
@@ -37,8 +39,8 @@ public class FreightRequestAnalyzeAgentService([FromKeyedServices("freight-reque
             return freightRequest;
         }
         freightRequest.ShipmentInformation = shipmentInformation;
-        
-        
+
+
         return freightRequest;
     }
     

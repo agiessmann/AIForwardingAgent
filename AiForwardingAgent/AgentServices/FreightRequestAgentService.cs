@@ -1,3 +1,4 @@
+using AiForwardingAgent.AgentServices.Enums;
 using AiForwardingAgent.AgentServices.Models;
 using Microsoft.Agents.AI;
 
@@ -19,40 +20,49 @@ public class FreightRequestAgentService([FromKeyedServices("freight-request-chec
     {
         ArgumentNullException.ThrowIfNull(freightRequestDto);
 
-        var email = freightRequestDto.FreightRequestEmail
-                    ?? throw new ArgumentNullException(nameof(freightRequestDto.FreightRequestEmail));
-
-        if (string.IsNullOrWhiteSpace(email.Subject))
-            throw new ArgumentException("Email subject cannot be null or empty.", nameof(freightRequestDto));
-
-        if (string.IsNullOrWhiteSpace(email.Body))
-            throw new ArgumentException("Email body cannot be null or empty.", nameof(freightRequestDto));
-
-        var prompt = BuildIsFreightRequestPrompt(email.Subject, email.Body);
-
-        var result = await agent.RunAsync(prompt, cancellationToken: cancellationToken);
-        var agentResponse = FreightRequestDto.FromJson(result.ToString());
-
-        // Fallback: falls Agent kein parsebares JSON liefert, Input beibehalten
-        if (agentResponse is null)
+        if (freightRequestDto.FreightRequestEmailHistory != null)
         {
-            return freightRequestDto;
+            var email = freightRequestDto.FreightRequestEmailHistory.FirstOrDefault(e => e.EmailType == FreightRequestEmailType.OriginalEmail)
+                        ?? throw new ArgumentNullException(nameof(freightRequestDto.FreightRequestEmailHistory));
+            
+            if (string.IsNullOrWhiteSpace(email.Subject))
+                throw new ArgumentException("Email subject cannot be null or empty.", nameof(freightRequestDto));
+
+            if (string.IsNullOrWhiteSpace(email.Body))
+                throw new ArgumentException("Email body cannot be null or empty.", nameof(freightRequestDto));
+
+            var prompt = BuildIsFreightRequestPrompt(email.Subject, email.Body);
+
+            var result = await agent.RunAsync(prompt, cancellationToken: cancellationToken);
+            var agentResponse = FreightRequestDto.FromJson(result.ToString());
+
+            // Fallback: falls Agent kein parsebares JSON liefert, Input beibehalten
+            if (agentResponse is null)
+            {
+                return freightRequestDto;
+            }
+
+            // Mail-Kontext aus Eingang behalten (Agent soll nur Klassifikation liefern)
+            agentResponse.FreightRequestEmailHistory?.Add( new EmailDto
+            {
+                Subject = email.Subject,
+                Body = email.Body,
+                MessageId = email.MessageId,
+                EmailSender = email.EmailSender,
+                EmailRecipient = email.EmailRecipient,
+                EmailType = email.EmailType,
+                SentReceivedDate = email.SentReceivedDate,
+                Direction = email.Direction,
+                
+            });
+
+            // Optional: falls Agent CustomerReference nicht setzt, vorhandenen Wert übernehmen
+            agentResponse.CustomerReference ??= freightRequestDto.CustomerReference;
+
+            return agentResponse;
         }
-
-        // Mail-Kontext aus Eingang behalten (Agent soll nur Klassifikation liefern)
-        agentResponse.FreightRequestEmail = new EmailDto
-        {
-            Subject = email.Subject,
-            Body = email.Body,
-            MessageId = email.MessageId,
-            EmailSender = email.EmailSender,
-            EmailRecipient = email.EmailRecipient
-        };
-
-        // Optional: falls Agent CustomerReference nicht setzt, vorhandenen Wert übernehmen
-        agentResponse.CustomerReference ??= freightRequestDto.CustomerReference;
-
-        return agentResponse;
+        
+        throw new ArgumentNullException(nameof(freightRequestDto.FreightRequestEmailHistory), "FreightRequestEmailHistory cannot be null.");
     }
 
     // prompts

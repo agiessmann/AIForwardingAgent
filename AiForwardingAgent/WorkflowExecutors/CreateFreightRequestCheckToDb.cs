@@ -1,6 +1,4 @@
-using AiForwardingAgent.AgentServices;
 using AiForwardingAgent.AgentServices.Models;
-using AiForwardingAgent.Data.Models;
 using AiForwardingAgent.Data.Services;
 using Microsoft.Agents.AI.Workflows;
 
@@ -36,7 +34,7 @@ public class CreateFreightRequestCheckToDb(IFreightRequestCheckService freightRe
             IsFreightRequest = freightRequest.IsFreightRequest,
             Confidence = freightRequest.Confidence,
             Reason = freightRequest.Reason,
-            FreightRequestEmail = freightRequest.FreightRequestEmail,
+            FreightRequestEmailHistory = freightRequest.FreightRequestEmailHistory
         };
     }
 }

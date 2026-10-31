@@ -141,6 +141,9 @@ namespace AiForwardingAgent.Data.Migrations
                         .HasMaxLength(10000)
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("Direction")
+                        .HasColumnType("int");
+
                     b.Property<string>("EmailRecipient")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -151,8 +154,17 @@ namespace AiForwardingAgent.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<int>("EmailType")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FreightRequestId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("MessageId")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("SentReceivedDate")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Subject")
                         .IsRequired()
@@ -160,6 +172,8 @@ namespace AiForwardingAgent.Data.Migrations
                         .HasColumnType("nvarchar(255)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FreightRequestId");
 
                     b.ToTable("Emails");
                 });
@@ -327,8 +341,8 @@ namespace AiForwardingAgent.Data.Migrations
                     b.Property<string>("CustomerReference")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("FreightRequestEmailId")
-                        .HasColumnType("int");
+                    b.Property<string>("DeclinedQuestionKeysJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsFreightRequest")
                         .HasColumnType("bit");
@@ -354,8 +368,6 @@ namespace AiForwardingAgent.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
-
-                    b.HasIndex("FreightRequestEmailId");
 
                     b.HasIndex("ShipmentId");
 
@@ -766,6 +778,13 @@ namespace AiForwardingAgent.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("AiForwardingAgent.Data.Models.Email", b =>
+                {
+                    b.HasOne("AiForwardingAgent.Data.Models.FreightRequest", null)
+                        .WithMany("FreightRequestEmailHistory")
+                        .HasForeignKey("FreightRequestId");
+                });
+
             modelBuilder.Entity("AiForwardingAgent.Data.Models.EmailSenderInformation", b =>
                 {
                     b.HasOne("AiForwardingAgent.Data.Models.Customer", "Customer")
@@ -794,19 +813,11 @@ namespace AiForwardingAgent.Data.Migrations
                         .WithMany()
                         .HasForeignKey("CustomerId");
 
-                    b.HasOne("AiForwardingAgent.Data.Models.Email", "FreightRequestEmail")
-                        .WithMany()
-                        .HasForeignKey("FreightRequestEmailId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("AiForwardingAgent.Data.Models.Shipment", "Shipment")
                         .WithMany()
                         .HasForeignKey("ShipmentId");
 
                     b.Navigation("Customer");
-
-                    b.Navigation("FreightRequestEmail");
 
                     b.Navigation("Shipment");
                 });
@@ -907,6 +918,8 @@ namespace AiForwardingAgent.Data.Migrations
 
             modelBuilder.Entity("AiForwardingAgent.Data.Models.FreightRequest", b =>
                 {
+                    b.Navigation("FreightRequestEmailHistory");
+
                     b.Navigation("Packages");
                 });
 #pragma warning restore 612, 618

@@ -127,6 +127,8 @@ builder.Services.AddScoped<IFreightRequestAgentService, FreightRequestAgentServi
 builder.Services.AddScoped<IFreightRequestAnalyzeAgentService, FreightRequestAnalyzeAgentService>();
 builder.Services.AddScoped<IFreightRequestMissingInformationAgentService, FreightRequestMissingInformationAgentService>();
 builder.Services.AddScoped<IFreightRequestMissingInformationReplyAgentService, FreightRequestMissingInformationReplyAgentService>();
+builder.Services.AddScoped<IFreightRequestReplyAnalysisAgent, FreightRequestReplyAnalysisAgent>();
+builder.Services.AddScoped<IFreightRequestUpdateService, FreightRequestUpdateService>();
 
 // AI Assistant Session
 builder.Services.AddScoped<AiAssistantSession>();

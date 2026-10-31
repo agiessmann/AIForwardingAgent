@@ -1,4 +1,5 @@
 using AiForwardingAgent.AgentServices;
+using AiForwardingAgent.AgentServices.Enums;
 using AiForwardingAgent.AgentServices.Models;
 using Microsoft.Agents.AI.Workflows;
 
@@ -11,9 +12,8 @@ internal sealed partial class FreightRequestDetectionExecutor(IFreightRequestAge
     public override async ValueTask<FreightRequestDto> HandleAsync(FreightRequestDto message, IWorkflowContext context,
         CancellationToken cancellationToken = new CancellationToken())
     {
-        var email = message.FreightRequestEmail 
-                    ?? throw new ArgumentNullException(nameof(message.FreightRequestEmail), "FreightRequestEmail cannot be null.");
-        
+        var email = message.FreightRequestEmailHistory?.FirstOrDefault(e => e.EmailType == FreightRequestEmailType.OriginalEmail)
+                    ?? throw new ArgumentNullException(nameof(message.FreightRequestEmailHistory), "FreightRequestEmailHistory cannot be null.");
         var subject = email.Subject;
         var body = email;
         var messageId =  email.MessageId;

@@ -1,3 +1,4 @@
+using AiForwardingAgent.AgentServices.Enums;
 using AiForwardingAgent.AgentServices.Models;
 using AiForwardingAgent.EmailService;
 using Microsoft.Agents.AI.Workflows;
@@ -18,11 +19,14 @@ public class ConfirmFreightRequestEmailExecutor(IEmailMailboxService emailMailbo
         
         // Implement the logic to handle the confirmation of the freight request email
         // For example, you can send a confirmation email back to the sender
-        if (message.FreightRequestEmail != null)
+        if (message.FreightRequestEmailHistory != null)
         {
+            var email = message.FreightRequestEmailHistory.LastOrDefault(e => e.Direction == EmailDirection.Incoming)
+                        ?? throw new ArgumentNullException(nameof(message.FreightRequestEmailHistory), "No incoming email found in the history.");
+            
             await emailMailboxService.ReplyToMessageAsync(
-                messageId: message.FreightRequestEmail.MessageId ??
-                           throw new ArgumentNullException(nameof(message.FreightRequestEmail.MessageId),
+                messageId: email.MessageId ??
+                           throw new ArgumentNullException(nameof(email.MessageId),
                                "Email MessageId cannot be null."),
                 textBody:
                 "Thank you for your freight request. We have received your request and will process it shortly.",
@@ -32,14 +36,14 @@ public class ConfirmFreightRequestEmailExecutor(IEmailMailboxService emailMailbo
                 cancellationToken: cancellationToken);
 
             await emailMailboxService.MarkAsReadAsync(
-                messageId: message.FreightRequestEmail.MessageId.ToString() ??
-                           throw new ArgumentNullException(nameof(message.FreightRequestEmail.MessageId),
+                messageId: email.MessageId.ToString() ??
+                           throw new ArgumentNullException(nameof(email.MessageId),
                                "Email MessageId cannot be null."),
                 cancellationToken: cancellationToken);
 
             await emailMailboxService.MarkAsFlaggedAsync(
-                messageId: message.FreightRequestEmail.MessageId ??
-                           throw new ArgumentNullException(nameof(message.FreightRequestEmail.MessageId),
+                messageId: email.MessageId ??
+                           throw new ArgumentNullException(nameof(email.MessageId),
                                "Email MessageId cannot be null."),
                 flagColor: AppleMailFlagColor.Green,
                 cancellationToken: cancellationToken);

@@ -1,4 +1,5 @@
 using AiForwardingAgent.AgentServices;
+using AiForwardingAgent.AgentServices.Enums;
 using AiForwardingAgent.AgentServices.Models;
 using Microsoft.Agents.AI.Workflows;
 
@@ -12,9 +13,9 @@ internal partial class FreightRequestAnalyzeExecutor(IFreightRequestAnalyzeAgent
         IWorkflowContext context,
         CancellationToken cancellationToken = default)
     {
-        var email = message.FreightRequestEmail 
-                    ?? throw new ArgumentNullException(nameof(message.FreightRequestEmail));
-
+        var email = message.FreightRequestEmailHistory?.FirstOrDefault(e => e.EmailType == FreightRequestEmailType.OriginalEmail)
+                    ?? throw new ArgumentNullException(nameof(message.FreightRequestEmailHistory), "FreightRequestEmailHistory cannot be null.");
+        
         if (string.IsNullOrEmpty(email.Subject))
             throw new ArgumentNullException(nameof(email.Subject), "Email subject cannot be null or empty.");
 
@@ -29,10 +30,8 @@ internal partial class FreightRequestAnalyzeExecutor(IFreightRequestAnalyzeAgent
             throw new ArgumentNullException(nameof(messageId), "Email MessageId cannot be null or empty.");
 
 
-        var result = await freightRequestAnalyzeAgentService.AnalyzeFreightRequestAsync(message, cancellationToken);
-        
-        result.FreightRequestEmail =email;
-        return result;
+        // The analyze service returns the same DTO, so the history already contains the email.
+        return await freightRequestAnalyzeAgentService.AnalyzeFreightRequestAsync(message, cancellationToken);
     }
 
 

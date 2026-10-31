@@ -8,7 +8,8 @@ public class FreightRequestDto
     public int? FreightRequestId { get; set; }
     
     public FreightRequestStatus Status { get; set; } = FreightRequestStatus.New;
-    public EmailDto? FreightRequestEmail { get; set; } = new EmailDto();
+    
+    public List<EmailDto>? FreightRequestEmailHistory { get; set; } = [];
 
     public string? CustomerReference { get; set; }
 
@@ -19,7 +20,12 @@ public class FreightRequestDto
     public string? Reason { get; set; }
     public ShipmentDto? ShipmentInformation { get; set; } = new ShipmentDto();
     
-    public List<MissingInformation>? MissingInformation { get; set; } = new List<MissingInformation>();
+    public List<MissingInformation>? MissingInformation { get; set; } = [];
+    
+    public List<string>? DeclinedQuestionKeys { get; set; } = [];
+
+    public bool RequiresManualReview { get; set; }
+    public string? ManualReviewReason { get; set; }
     private static JsonSerializerOptions Options => new JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = true

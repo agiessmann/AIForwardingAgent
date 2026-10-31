@@ -1,3 +1,4 @@
+using AiForwardingAgent.AgentServices.Enums;
 using AiForwardingAgent.Data.Models;
 using AiForwardingAgent.AgentServices.Models;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,8 @@ public interface IFreightRequestService
     Task<IEnumerable<FreightRequestDto>> GetAllFreightRequestsAsDtoAsync();
     
     Task<FreightRequest> UpsertFreightRequestAsync(FreightRequest freightRequest);
+
+    Task<Email?> AddEmailToHistoryAsync(int freightRequestId, Email email);
     
 }
 
@@ -86,7 +89,7 @@ public class FreightRequestService(
     private static IQueryable<FreightRequest> BuildFreightRequestBaseQuery(ApplicationDbContext ctx)
     {
         return ctx.FreightRequests
-            .Include(x => x.FreightRequestEmail)
+            .Include(x => x.FreightRequestEmailHistory)
             .Include(x => x.Customer)
             .Include(x => x.Packages)
             .Include(x => x.Shipment)
@@ -110,13 +113,15 @@ public class FreightRequestService(
 
         await using var ctx = await dbContextFactory.CreateDbContextAsync();
 
-        var messageId = freightRequest.FreightRequestEmail?.MessageId;
+        var messageId = freightRequest.FreightRequestEmailHistory?
+            .FirstOrDefault(e => e.EmailType == FreightRequestEmailType.OriginalEmail)?.MessageId;
         FreightRequest? existing = null;
 
         if (messageId is not null)
         {
             existing = await BuildFreightRequestUpdateQuery(ctx)
-                .FirstOrDefaultAsync(x => x.FreightRequestEmail.MessageId == messageId);
+                .FirstOrDefaultAsync(x => x.FreightRequestEmailHistory!.Any(e =>
+                    e.EmailType == FreightRequestEmailType.OriginalEmail && e.MessageId == messageId));
         }
 
         if (existing is null && freightRequest.Id > 0)
@@ -145,7 +150,7 @@ public class FreightRequestService(
         }
 
         UpdateCoreFields(existing, freightRequest);
-        existing.FreightRequestEmail = UpdateEmail(existing.FreightRequestEmail, freightRequest.FreightRequestEmail);
+        MergeEmailHistory(existing, freightRequest.FreightRequestEmailHistory);
         existing.Customer =UpdateCustomer(existing.Customer, freightRequest.Customer);
         UpdateShipment(existing, freightRequest.Shipment);
         ReplacePackages(ctx, existing, freightRequest.Packages);
@@ -163,24 +168,72 @@ public class FreightRequestService(
         target.Reason = source.Reason;
         target.CustomerReference = source.CustomerReference;
         target.MissingInformationJson = source.MissingInformationJson;
+        target.DeclinedQuestionKeysJson = source.DeclinedQuestionKeysJson;
     }
 
-    private static Email? UpdateEmail(Email? target, Email? source)
+    public async Task<Email?> AddEmailToHistoryAsync(int freightRequestId, Email email)
     {
-        if (source is null)
+        ArgumentNullException.ThrowIfNull(email);
+
+        await using var ctx = await dbContextFactory.CreateDbContextAsync();
+
+        var freightRequest = await ctx.FreightRequests
+            .Include(x => x.FreightRequestEmailHistory)
+            .FirstOrDefaultAsync(x => x.Id == freightRequestId);
+
+        if (freightRequest is null)
         {
-            return target;
+            return null;
         }
 
-        target ??= new Email();
+        var added = MergeEmailHistory(freightRequest, [email]).FirstOrDefault();
+        await ctx.SaveChangesAsync();
 
-        target.Subject = source.Subject;
-        target.Body = source.Body;
-        target.MessageId = source.MessageId;
-        target.EmailSender = source.EmailSender;
-        target.EmailRecipient = source.EmailRecipient;
-        
-        return target;
+        return added ?? FindEmail(freightRequest.FreightRequestEmailHistory!, email);
+    }
+
+    // Adds only emails that are not yet part of the history; existing emails are never overwritten.
+    private static List<Email> MergeEmailHistory(FreightRequest target, IEnumerable<Email>? sourceEmails)
+    {
+        var added = new List<Email>();
+        if (sourceEmails is null)
+        {
+            return added;
+        }
+
+        target.FreightRequestEmailHistory ??= [];
+
+        foreach (var source in sourceEmails)
+        {
+            if (FindEmail(target.FreightRequestEmailHistory, source) is not null)
+            {
+                continue;
+            }
+
+            var email = new Email
+            {
+                Subject = source.Subject,
+                Body = source.Body,
+                MessageId = source.MessageId,
+                EmailSender = source.EmailSender,
+                EmailRecipient = source.EmailRecipient,
+                EmailType = source.EmailType,
+                Direction = source.Direction,
+                SentReceivedDate = source.SentReceivedDate ?? DateTime.UtcNow
+            };
+
+            target.FreightRequestEmailHistory.Add(email);
+            added.Add(email);
+        }
+
+        return added;
+    }
+
+    private static Email? FindEmail(IEnumerable<Email> history, Email candidate)
+    {
+        return history.FirstOrDefault(e => candidate.MessageId is not null
+            ? e.MessageId == candidate.MessageId && e.EmailType == candidate.EmailType
+            : e.EmailType == candidate.EmailType && e.Subject == candidate.Subject && e.Body == candidate.Body);
     }
 
     private static Customer? UpdateCustomer(Customer? target, Customer? source)
@@ -190,7 +243,7 @@ public class FreightRequestService(
             return target;
         }
 
-        
+        target ??= new Customer();
 
         target.CustomerName = source.CustomerName;
         target.CustomerCode = source.CustomerCode;
@@ -251,7 +304,8 @@ public class FreightRequestService(
         {
             return target;
         }
-        
+
+        target ??= new Location();
 
         target.Company = source.Company;
         target.Address = source.Address;
@@ -277,7 +331,8 @@ public class FreightRequestService(
         {
             return target;
         }
-        
+
+        target ??= new TradeTerm();
 
         target.Incoterm = source.Incoterm;
         target.NamedPlace = source.NamedPlace;
